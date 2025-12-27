@@ -1,8 +1,5 @@
 # SSH Log Analyzer
 
-https://img.shields.io/badge/license-MIT-blue.svg](LICENSE)
-https://img.shields.io/badge/platform-Linux-lightgrey.svg](https://www.linux.org/)
-
 一个强大的跨平台 SSH 登录日志分析工具，支持 Ubuntu/Debian 和 CentOS/RHEL 系统，能够统计 SSH 登录成功/失败次数、分析爆破 IP 来源，并提供历史数据总览。
 
 ## ✨ 特性
