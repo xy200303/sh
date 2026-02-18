@@ -30,6 +30,21 @@
 
 ### 快速开始
 
+#### 一键下载并执行（推荐）
+
+```bash
+# ProcMinerHunter.sh - 挖矿程序检测
+wget -O ProcMinerHunter.sh https://raw.githubusercontent.com/xy200303/sh/main/sh/ProcMinerHunter.sh && chmod +x ProcMinerHunter.sh && sudo ./ProcMinerHunter.sh
+
+# ProcessAnalyzer.sh - 进程分析
+wget -O ProcessAnalyzer.sh https://raw.githubusercontent.com/xy200303/sh/main/sh/ProcessAnalyzer.sh && chmod +x ProcessAnalyzer.sh && ./ProcessAnalyzer.sh $$
+
+# ssh_log.sh - SSH日志分析
+wget -O ssh_log.sh https://raw.githubusercontent.com/xy200303/sh/main/sh/ssh_log.sh && chmod +x ssh_log.sh && sudo ./ssh_log.sh
+```
+
+#### 分步执行
+
 ```bash
 # 赋予执行权限
 chmod +x ProcMinerHunter.sh
@@ -176,6 +191,15 @@ sudo ./ProcMinerHunter.sh
 
 ### 快速开始
 
+#### 一键下载并执行（推荐）
+
+```bash
+# ProcessAnalyzer.sh - 进程分析
+wget -O ProcessAnalyzer.sh https://raw.githubusercontent.com/xy200303/sh/main/sh/ProcessAnalyzer.sh && chmod +x ProcessAnalyzer.sh && ./ProcessAnalyzer.sh $$
+```
+
+#### 分步执行
+
 ```bash
 # 赋予执行权限
 chmod +x ProcessAnalyzer.sh
@@ -302,6 +326,15 @@ pidof <进程名>
 - 🛡️ **安全可靠**：支持脚本内容预览，确保执行安全
 
 ### 快速开始
+
+#### 一键下载并执行（推荐）
+
+```bash
+# ssh_log.sh - SSH日志分析
+wget -O ssh_log.sh https://raw.githubusercontent.com/xy200303/sh/main/sh/ssh_log.sh && chmod +x ssh_log.sh && sudo ./ssh_log.sh
+```
+
+#### 分步执行
 
 ```bash
 # 赋予执行权限
@@ -571,7 +604,7 @@ crontab -e
 
 如有问题或建议，欢迎通过以下方式联系：
 - 提交 Issue
-- 发送邮件至：[your-email@example.com]
+- 发送邮件至：3483421977@qq.com (小云)
 
 ---
 
