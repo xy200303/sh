@@ -81,12 +81,15 @@ echo ""
 # 配置参数
 MIN_CPU_THRESHOLD=50.0
 MINING_KEYWORDS="xmrig minerd cpuminer ccminer stratum cryptonight monero xmr eth zec btc ltc doge"
-MINING_CONFIG_KEYWORDS="pool wallet mining miner config json conf cfg"
+MINING_CONFIG_KEYWORDS="stratum tcp wallet.url pool.host pool.port mining.pooler donate cpu threads intensity config json conf cfg"
+OBFUSCATION_KEYWORDS="base64 eval exec chr ord pack unpack gzinflate gzdeflate str_rot13 \$\{.*\} \$_GET \$_POST \$_REQUEST \$_COOKIE"
+MINING_CODE_PATTERNS="cryptonight rx algo difficulty pool wallet worker pass stratum+tcp stratum+ssl"
+CODE_INJECTION_KEYWORDS="eval exec system shell_exec passthru popen proc_open pcntl_exec assert create_function preg_replace.*e"
 SUSPICIOUS_PATHS="/tmp /dev/shm /var/tmp /var/run /run /root/.cache /home/*/.cache"
-KNOWN_POOL_PORTS="3333 4444 5555 6666 7777 8888 9000 14433 14444 8080 8181 9999"
-KNOWN_POOL_DOMAINS="pool.hashvault.pro xmr-eu1.nanopool.org xmr-usa1.nanopool.org"
-SUSPICIOUS_FILENAMES=".*min.* .*mine.* .*xmrig.* .*cpuminer.* .*ccminer.* .*stratum.*"
-SUSPICIOUS_EXTENSIONS=".sh .py .pl .rb .php .bin .elf .so .dll .exe"
+KNOWN_POOL_PORTS="3333 4444 5555 6666 7777 8888 9000 14433 14444 8080 8181 9999 443 80"
+KNOWN_POOL_DOMAINS="pool.hashvault.pro xmr-eu1.nanopool.org xmr-usa1.nanopool.org pool.supportxmr.com pool.minergate.com xmrpool.eu monerohash.com xmr.f2pool.com xmr-eu1.nano.pool xmr-usa1.nano pool.xmr.ru pool.leafy.cash pool.hashvault.to pool.hashvault.cc pool.hashvault.net pool.hashvault.io pool.gntl.uk xmr-eu.dwarfpool.com xmr-usa.dwarfpool.com xmr-asia.dwarfpool.com xmr.crypto-pool.fr xmr.poolto.be xmr-eu1.herominers.com xmr-usa1.herominers.com xmr-asia.herominers.com pool.monero.org xmr.pool.minergate.com xmr.crypto-pool.fr xmr-eu.nano.pool xmr-usa.nano.pool xmr-asia.nano.pool pool.supportxmr.com:443"
+SUSPICIOUS_FILENAMES="xmrig minerd cpuminer ccminer"
+SUSPICIOUS_EXTENSIONS=".sh .pl .rb .php .bin .elf .so .dll .exe"
 
 # 1. 深度进程扫描
 print_section "1. 深度进程扫描"
@@ -215,11 +218,19 @@ for path in $SUSPICIOUS_PATHS; do
                 fi
             done
             
+            # 检查文件内容
+            if [ -f "$file" ]; then
+                # 检测挖矿关键词
+                if grep -qiE "$MINING_KEYWORDS" "$file" 2>/dev/null; then
+                    print_error "发现挖矿关键词的可疑文件！"
+                    echo "  文件路径: $file"
+                    echo "  文件名: $filename"
+                    echo "  检测到: 挖矿关键词"
+                    is_suspicious=1
+                fi
+            fi
+            
             if [ $is_suspicious -eq 1 ]; then
-                print_error "发现可疑可执行文件！"
-                echo "  文件路径: $file"
-                echo "  文件名: $filename"
-                
                 # 获取文件信息
                 if [ -f "$file" ]; then
                     file_size=$(du -h "$file" 2>/dev/null | awk '{print $1}')
@@ -256,17 +267,31 @@ find / -type f -name ".*" -executable 2>/dev/null | grep -v -E "^/(proc|sys|dev)
     filename=$(basename "$file")
     
     # 检查文件名
+    is_suspicious=0
     for pattern in $SUSPICIOUS_FILENAMES; do
         if echo "$filename" | grep -qiE "$pattern"; then
-            print_error "发现隐藏的可疑文件！"
-            echo "  文件路径: $file"
-            echo "  文件名: $filename"
-            SUSPICIOUS_FILES=$((SUSPICIOUS_FILES + 1))
-            record_threat
-            echo ""
+            is_suspicious=1
             break
         fi
     done
+    
+    # 检查文件内容
+    if [ -f "$file" ]; then
+        # 检测挖矿关键词
+        if grep -qiE "$MINING_KEYWORDS" "$file" 2>/dev/null; then
+            print_error "发现挖矿关键词的可疑文件！"
+            echo "  文件路径: $file"
+            echo "  文件名: $filename"
+            echo "  检测到: 挖矿关键词"
+            is_suspicious=1
+        fi
+    fi
+    
+    if [ $is_suspicious -eq 1 ]; then
+        SUSPICIOUS_FILES=$((SUSPICIOUS_FILES + 1))
+        record_threat
+        echo ""
+    fi
 done
 
 if [ $SUSPICIOUS_FILES -eq 0 ]; then
@@ -298,11 +323,6 @@ for path in $CONFIG_PATHS; do
                     echo "  文件名: $(basename $file)"
                     
                     # 显示部分内容
-                    echo "  文件内容预览:"
-                    head -n 10 "$file" 2>/dev/null | while read line; do
-                        echo "    $line"
-                    done
-                    
                     SUSPICIOUS_CONFIGS=$((SUSPICIOUS_CONFIGS + 1))
                     record_threat
                     echo ""
@@ -355,10 +375,6 @@ for cron_file in $SYSTEM_CRON_FILES; do
         if grep -qiE "$MINING_KEYWORDS" "$cron_file" 2>/dev/null; then
             print_error "发现可疑的系统定时任务！"
             echo "  文件: $cron_file"
-            echo "  内容:"
-            cat "$cron_file" 2>/dev/null | while read line; do
-                echo "    $line"
-            done
             SUSPICIOUS_CRONS=$((SUSPICIOUS_CRONS + 1))
             record_threat
             echo ""
@@ -378,10 +394,6 @@ for user_home in /home/*; do
                 print_error "发现可疑的用户定时任务！"
                 echo "  用户: $username"
                 echo "  文件: $user_cron"
-                echo "  内容:"
-                cat "$user_cron" 2>/dev/null | while read line; do
-                    echo "    $line"
-                done
                 SUSPICIOUS_CRONS=$((SUSPICIOUS_CRONS + 1))
                 record_threat
                 echo ""
@@ -397,12 +409,8 @@ if [ "$(id -u)" -eq 0 ]; then
         crontab_output=$(crontab -u "$user" -l 2>/dev/null)
         if [ -n "$crontab_output" ]; then
             if echo "$crontab_output" | grep -qiE "$MINING_KEYWORDS"; then
-                print_error "发现用户 $username 的可疑定时任务！"
+                print_error "发现用户 $user 的可疑定时任务！"
                 echo "  用户: $user"
-                echo "  内容:"
-                echo "$crontab_output" | while read line; do
-                    echo "    $line"
-                done
                 SUSPICIOUS_CRONS=$((SUSPICIOUS_CRONS + 1))
                 record_threat
                 echo ""
@@ -488,18 +496,19 @@ for path in $SCRIPT_PATHS; do
     if [ -d "$path" ]; then
         for ext in $SCRIPT_EXTENSIONS; do
             find "$path" -name "*$ext" -type f 2>/dev/null | while read script; do
-                # 检查脚本内容
+                is_suspicious=0
+                script_name=$(basename "$script")
+                
+                # 检查脚本内容 - 挖矿关键词
                 if grep -qiE "$MINING_KEYWORDS" "$script" 2>/dev/null; then
                     print_error "发现可疑脚本文件！"
                     echo "  脚本路径: $script"
-                    echo "  文件名: $(basename $script)"
-                    
-                    # 显示部分内容
-                    echo "  脚本内容预览:"
-                    head -n 5 "$script" 2>/dev/null | while read line; do
-                        echo "    $line"
-                    done
-                    
+                    echo "  文件名: $script_name"
+                    echo "  检测到: 挖矿关键词"
+                    is_suspicious=1
+                fi
+                
+                if [ $is_suspicious -eq 1 ]; then
                     SUSPICIOUS_SCRIPTS=$((SUSPICIOUS_SCRIPTS + 1))
                     record_threat
                     echo ""
@@ -511,14 +520,15 @@ done
 
 # 扫描伪装成其他文件的脚本
 print_found "扫描伪装的脚本文件..."
-find / -type f -name ".*" -o -name ".*.sh" 2>/dev/null | grep -v -E "^/(proc|sys|dev)" | while read file; do
-    if [ -f "$file" ]; then
+find / -type f -name ".*" -o -name ".*.sh" 2>/dev/null | grep -v -E "^/(proc|sys|dev)" | while read -r file; do
+    if [ -n "$file" ] && [ -f "$file" ]; then
         # 检查文件头
         file_header=$(head -c 20 "$file" 2>/dev/null)
         if echo "$file_header" | grep -q "#!/"; then
             print_warning "发现可能伪装的脚本文件！"
             echo "  文件路径: $file"
             SUSPICIOUS_SCRIPTS=$((SUSPICIOUS_SCRIPTS + 1))
+            record_threat
             echo ""
         fi
     fi
@@ -709,7 +719,26 @@ for shell_config in $SYSTEM_SHELL_CONFIGS; do
             record_threat
             echo ""
         fi
-    fi
+        
+        # 深度扫描：检查是否包含挖矿程序执行命令
+        if grep -qiE 'nohup|\.\/.*xmrig|\.\/.*minerd|\.\/.*cpuminer|\.\/.*ccminer' "$shell_config" 2>/dev/null; then
+            print_error "发现Shell配置包含挖矿程序执行！"
+            echo "  配置文件: $shell_config"
+            echo "  检测到: 挖矿程序执行命令"
+            STARTUP_THREATS=$((STARTUP_THREATS + 1))
+            record_threat
+            echo ""
+        fi
+        
+        # 深度扫描：检查是否指向可疑目录
+        if grep -qiE '(/tmp|/dev/shm|/var/tmp|/var/run|/run)' "$shell_config" 2>/dev/null; then
+            print_warning "发现Shell配置指向可疑目录！"
+            echo "  配置文件: $shell_config"
+            echo "  检测到: 指向临时目录的执行"
+            STARTUP_THREATS=$((STARTUP_THREATS + 1))
+            record_threat
+            echo ""
+        fi
 done
 
 # 用户级Shell配置
@@ -726,6 +755,28 @@ for user_home in /home/*; do
                     record_threat
                     echo ""
                 fi
+                
+                # 深度扫描：检查是否包含挖矿程序执行命令
+                if grep -qiE 'nohup|\.\/.*xmrig|\.\/.*minerd|\.\/.*cpuminer|\.\/.*ccminer' "$shell_config" 2>/dev/null; then
+                    print_error "发现用户Shell配置包含挖矿程序执行！"
+                    echo "  配置文件: $shell_config"
+                    echo "  用户: $(basename $user_home)"
+                    echo "  检测到: 挖矿程序执行命令"
+                    STARTUP_THREATS=$((STARTUP_THREATS + 1))
+                    record_threat
+                    echo ""
+                fi
+                
+                # 深度扫描：检查是否指向可疑目录
+                if grep -qiE '(/tmp|/dev/shm|/var/tmp|/var/run|/run)' "$shell_config" 2>/dev/null; then
+                    print_warning "发现用户Shell配置指向可疑目录！"
+                    echo "  配置文件: $shell_config"
+                    echo "  用户: $(basename $user_home)"
+                    echo "  检测到: 指向临时目录的执行"
+                    STARTUP_THREATS=$((STARTUP_THREATS + 1))
+                    record_threat
+                    echo ""
+                fi
             fi
         done
     fi
@@ -738,6 +789,26 @@ for shell_config in $ROOT_SHELL_CONFIGS; do
         if grep -qiE "$MINING_KEYWORDS" "$shell_config" 2>/dev/null; then
             print_error "发现可疑的root用户Shell配置！"
             echo "  配置文件: $shell_config"
+            STARTUP_THREATS=$((STARTUP_THREATS + 1))
+            record_threat
+            echo ""
+        fi
+        
+        # 深度扫描：检查是否包含挖矿程序执行命令
+        if grep -qiE 'nohup|\.\/.*xmrig|\.\/.*minerd|\.\/.*cpuminer|\.\/.*ccminer' "$shell_config" 2>/dev/null; then
+            print_error "发现root Shell配置包含挖矿程序执行！"
+            echo "  配置文件: $shell_config"
+            echo "  检测到: 挖矿程序执行命令"
+            STARTUP_THREATS=$((STARTUP_THREATS + 1))
+            record_threat
+            echo ""
+        fi
+        
+        # 深度扫描：检查是否指向可疑目录
+        if grep -qiE '(/tmp|/dev/shm|/var/tmp|/var/run|/run)' "$shell_config" 2>/dev/null; then
+            print_warning "发现root Shell配置指向可疑目录！"
+            echo "  配置文件: $shell_config"
+            echo "  检测到: 指向临时目录的执行"
             STARTUP_THREATS=$((STARTUP_THREATS + 1))
             record_threat
             echo ""
@@ -933,7 +1004,161 @@ else
     print_warning "发现 $STARTUP_THREATS 个可疑启动项"
 fi
 
-# 10. 日志文件扫描
+# 10. 终端启动文件深度扫描
+print_section "10. 终端启动文件深度扫描"
+
+print_info "搜索所有打开终端时可能加载的文件..."
+echo ""
+
+TERMINAL_LOAD_THREATS=0
+
+# 10.1 搜索环境变量文件
+print_found "搜索环境变量文件..."
+ENV_FILES="/etc/environment /etc/default/locale /etc/sysconfig/i18n"
+for env_file in $ENV_FILES; do
+    if [ -f "$env_file" ]; then
+        if grep -qiE "$MINING_KEYWORDS" "$env_file" 2>/dev/null; then
+            print_error "发现环境变量文件包含挖矿关键词！"
+            echo "  文件: $env_file"
+            TERMINAL_LOAD_THREATS=$((TERMINAL_LOAD_THREATS + 1))
+            record_threat
+            echo ""
+        fi
+    fi
+done
+
+# 10.2 搜索用户环境变量
+print_found "搜索用户环境变量..."
+for user_home in /home/*; do
+    if [ -d "$user_home" ]; then
+        USER_ENV_FILES="$user_home/.environment $user_home/.env $user_home/.bash_environment"
+        for env_file in $USER_ENV_FILES; do
+            if [ -f "$env_file" ]; then
+                if grep -qiE "$MINING_KEYWORDS" "$env_file" 2>/dev/null; then
+                    print_error "发现用户环境变量文件包含挖矿关键词！"
+                    echo "  文件: $env_file"
+                    echo "  用户: $(basename $user_home)"
+                    TERMINAL_LOAD_THREATS=$((TERMINAL_LOAD_THREATS + 1))
+                    record_threat
+                    echo ""
+                fi
+            fi
+        done
+    fi
+done
+
+# 10.3 搜索登录脚本
+print_found "搜索登录脚本..."
+LOGIN_SCRIPTS="/etc/bash.bashrc /etc/bash.bash_logout /etc/bash.bash_login /etc/csh.login /etc/csh.logout /etc/zsh.login /etc/zsh.logout"
+for login_script in $LOGIN_SCRIPTS; do
+    if [ -f "$login_script" ]; then
+        if grep -qiE "$MINING_KEYWORDS" "$login_script" 2>/dev/null; then
+            print_error "发现登录脚本包含挖矿关键词！"
+            echo "  脚本: $login_script"
+            TERMINAL_LOAD_THREATS=$((TERMINAL_LOAD_THREATS + 1))
+            record_threat
+            echo ""
+        fi
+    fi
+done
+
+# 10.4 搜索用户登录脚本
+print_found "搜索用户登录脚本..."
+for user_home in /home/*; do
+    if [ -d "$user_home" ]; then
+        USER_LOGIN_SCRIPTS="$user_home/.bash_login $user_home/.bash_logout $user_home/.zlogin $user_home/.zlogout"
+        for login_script in $USER_LOGIN_SCRIPTS; do
+            if [ -f "$login_script" ]; then
+                if grep -qiE "$MINING_KEYWORDS" "$login_script" 2>/dev/null; then
+                    print_error "发现用户登录脚本包含挖矿关键词！"
+                    echo "  脚本: $login_script"
+                    echo "  用户: $(basename $user_home)"
+                    TERMINAL_LOAD_THREATS=$((TERMINAL_LOAD_THREATS + 1))
+                    record_threat
+                    echo ""
+                fi
+            fi
+        done
+    fi
+done
+
+# 10.5 搜索X11资源文件
+print_found "搜索X11资源文件..."
+X11_RESOURCES="/etc/X11/Xresources /etc/X11/Xmodmap /etc/X11/xorg.conf"
+for x11_file in $X11_RESOURCES; do
+    if [ -f "$x11_file" ]; then
+        if grep -qiE "$MINING_KEYWORDS" "$x11_file" 2>/dev/null; then
+            print_error "发现X11资源文件包含挖矿关键词！"
+            echo "  文件: $x11_file"
+            TERMINAL_LOAD_THREATS=$((TERMINAL_LOAD_THREATS + 1))
+            record_threat
+            echo ""
+        fi
+    fi
+done
+
+# 10.6 搜索用户X11资源文件
+print_found "搜索用户X11资源文件..."
+for user_home in /home/*; do
+    if [ -d "$user_home" ]; then
+        USER_X11_FILES="$user_home/.Xresources $user_home/.Xmodmap $user_home/.xprofile"
+        for x11_file in $USER_X11_FILES; do
+            if [ -f "$x11_file" ]; then
+                if grep -qiE "$MINING_KEYWORDS" "$x11_file" 2>/dev/null; then
+                    print_error "发现用户X11资源文件包含挖矿关键词！"
+                    echo "  文件: $x11_file"
+                    echo "  用户: $(basename $user_home)"
+                    TERMINAL_LOAD_THREATS=$((TERMINAL_LOAD_THREATS + 1))
+                    record_threat
+                    echo ""
+                fi
+            fi
+        done
+    fi
+done
+
+# 10.7 搜索其他配置文件
+print_found "搜索其他配置文件..."
+OTHER_CONFIGS="/etc/issue /etc/issue.net /etc/motd /etc/update-motd.d/* /etc/ssh/sshrc"
+for config_file in $OTHER_CONFIGS; do
+    if [ -f "$config_file" ]; then
+        if grep -qiE "$MINING_KEYWORDS" "$config_file" 2>/dev/null; then
+            print_error "发现配置文件包含挖矿关键词！"
+            echo "  文件: $config_file"
+            TERMINAL_LOAD_THREATS=$((TERMINAL_LOAD_THREATS + 1))
+            record_threat
+            echo ""
+        fi
+    fi
+done
+
+# 10.8 搜索用户其他配置文件
+print_found "搜索用户其他配置文件..."
+for user_home in /home/*; do
+    if [ -d "$user_home" ]; then
+        USER_OTHER_CONFIGS="$user_home/.inputrc $user_home/.exrc $user_home/.viminfo $user_home/.lesskey"
+        for config_file in $USER_OTHER_CONFIGS; do
+            if [ -f "$config_file" ]; then
+                if grep -qiE "$MINING_KEYWORDS" "$config_file" 2>/dev/null; then
+                    print_error "发现用户配置文件包含挖矿关键词！"
+                    echo "  文件: $config_file"
+                    echo "  用户: $(basename $user_home)"
+                    TERMINAL_LOAD_THREATS=$((TERMINAL_LOAD_THREATS + 1))
+                    record_threat
+                    echo ""
+                fi
+            fi
+        done
+    fi
+done
+
+if [ $TERMINAL_LOAD_THREATS -eq 0 ]; then
+    print_info "未发现可疑的终端启动文件"
+else
+    print_warning "发现 $TERMINAL_LOAD_THREATS 个可疑的终端启动文件"
+fi
+
+# 11. 日志文件扫描
 print_section "10. 日志文件扫描"
 
 print_info "扫描系统日志中的挖矿活动..."
@@ -950,10 +1175,6 @@ for log_file in $LOG_FILES; do
         if [ -n "$mining_logs" ]; then
             print_error "发现日志中的挖矿活动！"
             echo "  日志文件: $log_file"
-            echo "  相关日志:"
-            echo "$mining_logs" | while read line; do
-                echo "    $line"
-            done
             LOG_THREATS=$((LOG_THREATS + 1))
             record_threat
             echo ""
@@ -984,8 +1205,9 @@ echo "  可疑系统服务数:   $SUSPICIOUS_SERVICES"
 echo "  可疑脚本文件数:   $SUSPICIOUS_SCRIPTS"
 echo "  挖矿网络连接数:   $MINING_CONNECTIONS"
 echo "  可疑启动项数:     $STARTUP_THREATS"
+echo "  终端启动文件数:   $TERMINAL_LOAD_THREATS"
 echo "  日志威胁数:       $LOG_THREATS"
-echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  总威胁数:         ${RED}$TOTAL_THREATS${NC}"
 echo ""
 
@@ -993,10 +1215,10 @@ echo ""
 RISK_LEVEL="安全"
 RISK_COLOR="${GREEN}"
 
-if [ $MINING_PROCESSES -gt 0 ] || [ $TOTAL_THREATS -ge 10 ]; then
+if [ $MINING_PROCESSES -gt 0 ] || [ $TOTAL_THREATS -ge 15 ]; then
     RISK_LEVEL="高危"
     RISK_COLOR="${RED}"
-elif [ $TOTAL_THREATS -ge 5 ]; then
+elif [ $TOTAL_THREATS -ge 8 ]; then
     RISK_LEVEL="中危"
     RISK_COLOR="${YELLOW}"
 elif [ $TOTAL_THREATS -ge 1 ]; then
