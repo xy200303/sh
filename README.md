@@ -34,10 +34,11 @@
 
 ```bash
 # ProcMinerHunter.sh - 挖矿程序检测
-wget -O ProcMinerHunter.sh https://raw.githubusercontent.com/xy200303/sh/main/sh/ProcMinerHunter.sh && chmod +x ProcMinerHunter.sh && sudo ./ProcMinerHunter.sh
+wget -O ProcMinerHunter.sh https://raw.githubusercontent.com/xy200303/sh/refs/heads/main/ProcMinerHunter.sh && chmod +x ProcMinerHunter.sh && sudo ./ProcMinerHunter.sh
+
 
 # ProcessAnalyzer.sh - 进程分析
-wget -O ProcessAnalyzer.sh https://raw.githubusercontent.com/xy200303/sh/main/sh/ProcessAnalyzer.sh && chmod +x ProcessAnalyzer.sh && ./ProcessAnalyzer.sh $$
+wget -O ProcessAnalyzer.sh https://raw.githubusercontent.com/xy200303/sh/refs/heads/main/ProcessAnalyzer.sh && chmod +x ProcessAnalyzer.sh && ./ProcessAnalyzer.sh $$
 
 # ssh_log.sh - SSH日志分析
 wget -O ssh_log.sh https://raw.githubusercontent.com/xy200303/sh/main/sh/ssh_log.sh && chmod +x ssh_log.sh && sudo ./ssh_log.sh
